@@ -1,0 +1,35 @@
+# cronwatch configuration file
+
+# Directory to store job state files
+state_dir: /var/lib/cronwatch
+
+# Path to the log file
+log_file: /var/log/cronwatch.log
+
+# How often (seconds) to check job states
+check_interval: 60
+
+alert:
+  email: ops@example.com
+  smtp_host: smtp.example.com
+  smtp_port: 587
+  smtp_from: cronwatch@example.com
+  # Optional: webhook for Slack / PagerDuty etc.
+  webhook_url: https://hooks.slack.com/services/XXX/YYY/ZZZ
+
+jobs:
+  - name: daily-backup
+    schedule: "0 2 * * *"
+    command: /usr/local/bin/backup.sh
+    timeout: 7200
+    alert_on_failure: true
+    alert_on_timeout: true
+    notify:
+      - ops@example.com
+
+  - name: hourly-cleanup
+    schedule: "0 * * * *"
+    command: /usr/local/bin/cleanup.sh
+    timeout: 300
+    alert_on_failure: true
+    alert_on_timeout: false
