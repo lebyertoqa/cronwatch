@@ -1,10 +1,10 @@
 # cronwatch example configuration
-# Copy to config.yaml and edit as needed.
+# Copy to config.yaml and adjust for your environment.
 
 jobs:
   - name: daily-backup
     command: /usr/local/bin/backup.sh
-    schedule: "0 2 * * *"   # every day at 02:00 UTC
+    schedule: "0 2 * * *"   # 02:00 UTC every day
     timeout: 3600
 
   - name: hourly-sync
@@ -18,25 +18,29 @@ alerts:
     smtp_port: 587
     username: alerts@example.com
     password: secret
-    from_address: alerts@example.com
+    from_address: cronwatch@example.com
     recipients:
       - ops@example.com
 
-# Optional: how often to send a digest of all job results (cron expression)
-digest_schedule: "0 8 * * 1"   # every Monday at 08:00 UTC
+throttle:
+  base_interval_seconds: 300    # 5 minutes between repeated alerts
+  backoff_multiplier: 2.0       # double the gap after each consecutive alert
+  max_interval_seconds: 3600    # never wait more than 1 hour
+  reset_on_success: true        # clear back-off when job recovers
 
-# Optional: health-check HTTP server
+digest:
+  enabled: true
+  schedule: "0 8 * * *"         # daily digest at 08:00 UTC
+
 healthcheck:
   enabled: true
   port: 8080
 
-# Optional: notification throttling
+history:
+  path: /var/lib/cronwatch/history.json
+  retention:
+    max_age_days: 30
+    max_entries_per_job: 500
+
 notifier:
-  min_interval_seconds: 3600   # suppress repeated alerts within 1 hour
-
-# Optional: history retention
-retention:
-  max_age_days: 30      # drop entries older than 30 days
-  max_entries: 200      # keep at most 200 entries per job
-
-history_path: /var/lib/cronwatch/history.json
+  min_interval_seconds: 3600
