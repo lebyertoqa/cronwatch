@@ -62,6 +62,19 @@ class Scheduler:
                 return False
         return is_due(job.schedule, now)
 
+    def reset_job(self, job_name: str) -> bool:
+        """Clear the last-run record for a job, allowing it to fire on the next due tick.
+
+        Returns True if the job was found and reset, False if the job name was not
+        tracked (i.e. it has never run in this scheduler instance).
+        """
+        if job_name in self._last_run:
+            del self._last_run[job_name]
+            logger.debug("Reset last-run record for job '%s'", job_name)
+            return True
+        logger.debug("reset_job called for unknown job '%s' — nothing to reset", job_name)
+        return False
+
     def run_forever(self, poll_interval: int = 30) -> None:  # pragma: no cover
         """Block forever, polling every *poll_interval* seconds."""
         logger.info("Scheduler started (poll interval=%ds)", poll_interval)
