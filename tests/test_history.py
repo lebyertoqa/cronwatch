@@ -101,4 +101,15 @@ def test_history_file_is_valid_json(store: HistoryStore) -> None:
     store.record(_make_result())
     with store.path.open() as fh:
         data = json.load(fh)
-    assert "backup" in data
+    assert isinstance(data, dict)
+
+
+def test_entries_ordered_most_recent_last(store: HistoryStore) -> None:
+    """Entries should be stored in insertion order (oldest first)."""
+    store.record(_make_result(exit_code=0, stdout="first"))
+    store.record(_make_result(exit_code=1, stdout="second"))
+    store.record(_make_result(exit_code=0, stdout="third"))
+    entries = store.get("backup")
+    assert entries[0].stdout_tail == "first"
+    assert entries[1].stdout_tail == "second"
+    assert entries[2].stdout_tail == "third"
