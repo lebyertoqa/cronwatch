@@ -81,3 +81,13 @@ def test_empty_config(config_file):
     cfg = load_config(config_file(""))
     assert cfg.jobs == []
     assert isinstance(cfg.alert, AlertConfig)
+
+
+def test_job_defaults(config_file):
+    """Verify that JobConfig default values are applied when fields are omitted."""
+    cfg = load_config(config_file(MINIMAL_YAML))
+    job = cfg.jobs[0]
+    assert job.timeout == 3600, "Default timeout should be 3600 seconds"
+    assert job.alert_on_failure is True, "Default alert_on_failure should be True"
+    assert job.alert_on_timeout is True, "Default alert_on_timeout should be True"
+    assert job.notify == [], "Default notify list should be empty"
