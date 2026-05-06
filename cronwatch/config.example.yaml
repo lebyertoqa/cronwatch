@@ -1,35 +1,42 @@
-# cronwatch configuration file
-
-# Directory to store job state files
-state_dir: /var/lib/cronwatch
-
-# Path to the log file
-log_file: /var/log/cronwatch.log
-
-# How often (seconds) to check job states
-check_interval: 60
-
-alert:
-  email: ops@example.com
-  smtp_host: smtp.example.com
-  smtp_port: 587
-  smtp_from: cronwatch@example.com
-  # Optional: webhook for Slack / PagerDuty etc.
-  webhook_url: https://hooks.slack.com/services/XXX/YYY/ZZZ
+# cronwatch example configuration
+# Copy to config.yaml and edit as needed.
 
 jobs:
   - name: daily-backup
-    schedule: "0 2 * * *"
     command: /usr/local/bin/backup.sh
-    timeout: 7200
-    alert_on_failure: true
-    alert_on_timeout: true
-    notify:
+    schedule: "0 2 * * *"   # every day at 02:00 UTC
+    timeout: 3600
+
+  - name: hourly-sync
+    command: /usr/local/bin/sync.sh
+    schedule: "0 * * * *"
+    timeout: 300
+
+alerts:
+  email:
+    smtp_host: smtp.example.com
+    smtp_port: 587
+    username: alerts@example.com
+    password: secret
+    from_address: alerts@example.com
+    recipients:
       - ops@example.com
 
-  - name: hourly-cleanup
-    schedule: "0 * * * *"
-    command: /usr/local/bin/cleanup.sh
-    timeout: 300
-    alert_on_failure: true
-    alert_on_timeout: false
+# Optional: how often to send a digest of all job results (cron expression)
+digest_schedule: "0 8 * * 1"   # every Monday at 08:00 UTC
+
+# Optional: health-check HTTP server
+healthcheck:
+  enabled: true
+  port: 8080
+
+# Optional: notification throttling
+notifier:
+  min_interval_seconds: 3600   # suppress repeated alerts within 1 hour
+
+# Optional: history retention
+retention:
+  max_age_days: 30      # drop entries older than 30 days
+  max_entries: 200      # keep at most 200 entries per job
+
+history_path: /var/lib/cronwatch/history.json
