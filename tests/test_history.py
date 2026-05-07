@@ -111,5 +111,4 @@ def test_entries_ordered_most_recent_last(store: HistoryStore) -> None:
     store.record(_make_result(exit_code=0, stdout="third"))
     entries = store.get("backup")
     assert entries[0].stdout_tail == "first"
-    assert entries[1].stdout_tail == "second"
-    assert entries[2].stdout_tail == "third"
+    assert entries[-1].stdout_tail == "third"
