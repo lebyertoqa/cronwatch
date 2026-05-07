@@ -1,74 +1,84 @@
-"""Configuration loader for cronwatch."""
+"""Configuration models and loader for cronwatch."""
+from __future__ import annotations
 
-import os
-import yaml
 from dataclasses import dataclass, field
-from typing import List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import yaml
 
 
 @dataclass
 class JobConfig:
     name: str
-    schedule: str
     command: str
-    timeout: int = 3600
-    alert_on_failure: bool = True
-    alert_on_timeout: bool = True
-    notify: List[str] = field(default_factory=list)
+    schedule: str
+    tags: List[str] = field(default_factory=list)
+    enabled: bool = True
+    timeout_seconds: int = 0
+    notify_on_recovery: bool = True
 
 
 @dataclass
 class AlertConfig:
-    email: Optional[str] = None
-    webhook_url: Optional[str] = None
+    email: List[str] = field(default_factory=list)
     smtp_host: str = "localhost"
     smtp_port: int = 25
-    smtp_from: str = "cronwatch@localhost"
+    from_address: str = "cronwatch@localhost"
+    max_alerts_per_hour: int = 0
 
 
 @dataclass
 class CronwatchConfig:
     jobs: List[JobConfig] = field(default_factory=list)
     alert: AlertConfig = field(default_factory=AlertConfig)
-    log_file: str = "/var/log/cronwatch.log"
-    state_dir: str = "/var/lib/cronwatch"
-    check_interval: int = 60
+    history_path: str = "/var/lib/cronwatch/history.json"
+    audit_path: str = "/var/lib/cronwatch/audit.log"
+    digest_interval_hours: int = 24
+    retention_days: int = 30
+    healthcheck_port: int = 8080
+    metrics_port: int = 9090
 
 
-def load_config(path: str) -> CronwatchConfig:
-    """Load and parse a YAML configuration file."""
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Config file not found: {path}")
-
-    with open(path, "r") as f:
-        raw = yaml.safe_load(f) or {}
-
-    alert_raw = raw.get("alert", {})
-    alert = AlertConfig(
-        email=alert_raw.get("email"),
-        webhook_url=alert_raw.get("webhook_url"),
-        smtp_host=alert_raw.get("smtp_host", "localhost"),
-        smtp_port=alert_raw.get("smtp_port", 25),
-        smtp_from=alert_raw.get("smtp_from", "cronwatch@localhost"),
+def _parse_job(raw: Dict[str, Any]) -> JobConfig:
+    return JobConfig(
+        name=raw["name"],
+        command=raw["command"],
+        schedule=raw["schedule"],
+        tags=raw.get("tags") or [],
+        enabled=raw.get("enabled", True),
+        timeout_seconds=raw.get("timeout_seconds", 0),
+        notify_on_recovery=raw.get("notify_on_recovery", True),
     )
 
-    jobs = [
-        JobConfig(
-            name=j["name"],
-            schedule=j["schedule"],
-            command=j["command"],
-            timeout=j.get("timeout", 3600),
-            alert_on_failure=j.get("alert_on_failure", True),
-            alert_on_timeout=j.get("alert_on_timeout", True),
-            notify=j.get("notify", []),
-        )
-        for j in raw.get("jobs", [])
-    ]
+
+def _parse_alert(raw: Dict[str, Any]) -> AlertConfig:
+    return AlertConfig(
+        email=raw.get("email") or [],
+        smtp_host=raw.get("smtp_host", "localhost"),
+        smtp_port=raw.get("smtp_port", 25),
+        from_address=raw.get("from_address", "cronwatch@localhost"),
+        max_alerts_per_hour=raw.get("max_alerts_per_hour", 0),
+    )
+
+
+def load_config(path: str | Path) -> CronwatchConfig:
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Config file not found: {path}")
+    with p.open() as fh:
+        raw = yaml.safe_load(fh) or {}
+
+    jobs = [_parse_job(j) for j in raw.get("jobs", [])]
+    alert = _parse_alert(raw.get("alert") or {})
 
     return CronwatchConfig(
         jobs=jobs,
         alert=alert,
-        log_file=raw.get("log_file", "/var/log/cronwatch.log"),
-        state_dir=raw.get("state_dir", "/var/lib/cronwatch"),
-        check_interval=raw.get("check_interval", 60),
+        history_path=raw.get("history_path", "/var/lib/cronwatch/history.json"),
+        audit_path=raw.get("audit_path", "/var/lib/cronwatch/audit.log"),
+        digest_interval_hours=raw.get("digest_interval_hours", 24),
+        retention_days=raw.get("retention_days", 30),
+        healthcheck_port=raw.get("healthcheck_port", 8080),
+        metrics_port=raw.get("metrics_port", 9090),
     )
