@@ -47,3 +47,19 @@ def safe_inject_secrets(
     resolved = resolve_secrets(job)
     merged = {**base_env, **resolved}
     return merged, absent
+
+
+def has_all_secrets(job) -> bool:
+    """Return ``True`` if all secrets required by *job* can be resolved.
+
+    This is a convenience predicate for callers that want to check secret
+    availability without catching :class:`SecretInjectionError` or
+    unpacking the tuple returned by :func:`safe_inject_secrets`.
+
+    Example::
+
+        if not has_all_secrets(job):
+            logger.warning("Skipping %s: secrets unavailable", job.name)
+            return
+    """
+    return not missing_secrets(job)
