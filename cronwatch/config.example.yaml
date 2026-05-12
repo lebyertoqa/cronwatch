@@ -1,57 +1,77 @@
 # cronwatch example configuration
-# Copy to config.yaml and adjust as needed.
+# Copy this file to config.yaml and adjust to your needs.
+
+alerts:
+  email:
+    smtp_host: localhost
+    smtp_port: 25
+    from_address: cronwatch@example.com
+    recipients:
+      - ops@example.com
 
 jobs:
   - name: daily-backup
     command: /usr/local/bin/backup.sh
     schedule: "0 2 * * *"
-    timeout: 3600
-    tags: [backup, nightly]
+    timeout_seconds: 3600
+    retries: 2
+    tags:
+      - backup
+      - nightly
     labels:
-      env: production
-      team: infra
-    enabled: true
+      team: ops
+      env: prod
+    annotations:
+      runbook: https://wiki.example.com/runbooks/backup
+      escalation_policy: pagerduty-critical
+      notify_on_recovery: "true"
+    environment:
+      BACKUP_TARGET: /mnt/backups
 
-  - name: hourly-sync
-    command: /usr/local/bin/sync.sh
+  - name: hourly-report
+    command: /usr/local/bin/report.sh
     schedule: "0 * * * *"
-    timeout: 300
-    tags: [sync]
-    enabled: true
+    timeout_seconds: 300
+    tags:
+      - reporting
+    labels:
+      team: analytics
+      env: prod
+    annotations:
+      owner: alice
+      tier: standard
 
-alerts:
-  email:
-    smtp_host: smtp.example.com
-    smtp_port: 587
-    username: alerts@example.com
-    password: secret
-    from_address: alerts@example.com
-    recipients:
-      - ops@example.com
+  - name: db-vacuum
+    command: /usr/local/bin/vacuum.sh
+    schedule: "30 3 * * 0"
+    timeout_seconds: 7200
+    retries: 1
+    enabled: false
+    tags:
+      - database
+      - maintenance
+    labels:
+      team: dba
+      env: prod
+    annotations:
+      owner: bob
+      tier: critical
+      runbook: https://wiki.example.com/runbooks/vacuum
 
-retry:
-  default_attempts: 3
-  default_delay: 10.0      # seconds to wait between attempts
-  default_backoff: 2.0     # multiply delay by this factor after each failure
-  per_job:
-    daily-backup:
-      attempts: 5
-      delay: 30.0
-      backoff: 1.5
-    hourly-sync:
-      attempts: 2
-      delay: 5.0
-
-history:
-  path: /var/lib/cronwatch/history.json
-  retention_days: 30
+retention:
+  max_age_days: 90
   max_entries_per_job: 500
 
+digest:
+  enabled: true
+  schedule: "0 8 * * 1"
+  recipients:
+    - ops@example.com
+
 healthcheck:
+  enabled: true
   port: 8080
 
 metrics:
+  enabled: true
   port: 9090
-
-audit:
-  path: /var/log/cronwatch/audit.log
