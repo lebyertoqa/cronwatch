@@ -40,7 +40,12 @@ class PauseStore:
     def _load(self) -> None:
         if not self._path.exists():
             return
-        raw = json.loads(self._path.read_text())
+        try:
+            raw = json.loads(self._path.read_text())
+        except (json.JSONDecodeError, OSError) as exc:
+            raise RuntimeError(
+                f"Failed to load pause state from {self._path}: {exc}"
+            ) from exc
         for name, data in raw.items():
             self._entries[name] = PauseEntry(
                 job_name=name,
