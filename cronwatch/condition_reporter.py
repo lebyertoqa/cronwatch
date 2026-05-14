@@ -18,6 +18,16 @@ class ConditionSkipSummary:
         self.skip_count += 1
         self.reasons.append(reason)
 
+    def most_common_reason(self) -> str | None:
+        """Return the reason that appears most frequently, or None if no skips.
+
+        When multiple reasons share the highest frequency, the one that was
+        recorded first among the tied candidates is returned.
+        """
+        if not self.reasons:
+            return None
+        return max(set(self.reasons), key=self.reasons.count)
+
 
 class ConditionReporter:
     """Accumulates ConditionalResults and exposes skip summaries."""
