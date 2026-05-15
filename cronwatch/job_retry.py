@@ -37,6 +37,11 @@ class RetryResult:
     attempts: int
     succeeded: bool
 
+    @property
+    def retried(self) -> bool:
+        """Return True if the job was attempted more than once."""
+        return self.attempts > 1
+
 
 def with_retry(
     job: JobConfig,
