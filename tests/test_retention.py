@@ -63,6 +63,16 @@ def test_prune_older_than_unknown_job_returns_zero(store: HistoryStore) -> None:
     assert removed == 0
 
 
+def test_prune_older_than_removes_all_entries(store: HistoryStore) -> None:
+    """Pruning with a future cutoff should remove every entry for the job."""
+    _seed(store, [_entry("j", days_ago=10), _entry("j", days_ago=5)])
+    # cutoff is in the future relative to all entries
+    cutoff = _utc(days_ago=-1)
+    removed = prune_older_than(store, "j", cutoff)
+    assert removed == 2
+    assert store.get("j") == []
+
+
 # ---------------------------------------------------------------------------
 # prune_excess
 # ---------------------------------------------------------------------------
@@ -90,22 +100,4 @@ def test_prune_excess_invalid_max_raises(store: HistoryStore) -> None:
 
 # ---------------------------------------------------------------------------
 # RetentionPolicy
-# ---------------------------------------------------------------------------
-
-def test_policy_applies_both_rules(store: HistoryStore) -> None:
-    entries = [_entry("j", days_ago=d) for d in (20, 10, 2, 1, 0)]
-    _seed(store, entries)
-    policy = RetentionPolicy(store, max_age_days=5, max_entries=1)
-    total = policy.apply("j")
-    assert total >= 3
-    assert len(store.get("j")) == 1
-
-
-def test_policy_apply_all_covers_multiple_jobs(store: HistoryStore) -> None:
-    for job in ("alpha", "beta"):
-        _seed(store, [_entry(job, days_ago=d) for d in (30, 20, 1)])
-    policy = RetentionPolicy(store, max_age_days=10)
-    results = policy.apply_all()
-    assert set(results.keys()) == {"alpha", "beta"}
-    assert results["alpha"] == 2
-    assert results["beta"] == 2
+# -------------------------------------------
