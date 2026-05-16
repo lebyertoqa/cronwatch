@@ -1,82 +1,84 @@
-"""Persistent execution history for cron jobs."""
-
+"""Persistent history of job execution results."""
 from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import List, Optional
 
 from cronwatch.executor import ExecutionResult
 
-DEFAULT_HISTORY_PATH = Path("/var/lib/cronwatch/history.json")
-_MAX_ENTRIES_PER_JOB = 50
-
 
 @dataclass
 class HistoryEntry:
     job_name: str
-    started_at: str  # ISO-8601
-    duration_seconds: float
+    success: bool
     exit_code: int
-    succeeded: bool
-    stdout_tail: str
-    stderr_tail: str
+    duration: float
+    started_at: str
+    finished_at: Optional[str] = None
+    stdout: str = ""
+    stderr: str = ""
 
-    @classmethod
-    def from_result(cls, result: ExecutionResult) -> "HistoryEntry":
-        return cls(
+    @staticmethod
+    def from_result(result: ExecutionResult) -> "HistoryEntry":
+        return HistoryEntry(
             job_name=result.job_name,
-            started_at=result.started_at.isoformat(),
-            duration_seconds=round(result.duration_seconds, 3),
+            success=result.success,
             exit_code=result.exit_code,
-            succeeded=result.succeeded,
-            stdout_tail=result.stdout[-500:] if result.stdout else "",
-            stderr_tail=result.stderr[-500:] if result.stderr else "",
+            duration=result.duration,
+            started_at=result.started_at.isoformat(),
+            finished_at=result.finished_at.isoformat() if result.finished_at else None,
+            stdout=result.stdout or "",
+            stderr=result.stderr or "",
         )
 
 
 class HistoryStore:
-    """Read/write execution history to a JSON file."""
+    def __init__(self, history_dir: str | Path) -> None:
+        self._dir = Path(history_dir)
+        self._dir.mkdir(parents=True, exist_ok=True)
 
-    def __init__(self, path: Path = DEFAULT_HISTORY_PATH) -> None:
-        self.path = Path(path)
+    def _path_for(self, job_name: str) -> Path:
+        safe = job_name.replace(os.sep, "_")
+        return self._dir / f"{safe}.jsonl"
 
-    def _load_raw(self) -> dict:
-        if not self.path.exists():
-            return {}
-        with self.path.open("r", encoding="utf-8") as fh:
-            return json.load(fh)
+    def _load_raw(self, job_name: str) -> List[dict]:
+        path = self._path_for(job_name)
+        if not path.exists():
+            return []
+        rows: List[dict] = []
+        with path.open(encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    rows.append(json.loads(line))
+        return rows
 
-    def _save_raw(self, data: dict) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.path.with_suffix(".tmp")
-        with tmp.open("w", encoding="utf-8") as fh:
-            json.dump(data, fh, indent=2)
-        os.replace(tmp, self.path)
-
-    def record(self, result: ExecutionResult) -> None:
-        """Append a result to the history, pruning old entries."""
-        data = self._load_raw()
+    def record(self, result: ExecutionResult) -> HistoryEntry:
         entry = HistoryEntry.from_result(result)
-        entries = data.get(result.job_name, [])
-        entries.append(asdict(entry))
-        entries = entries[-_MAX_ENTRIES_PER_JOB:]
-        data[result.job_name] = entries
-        self._save_raw(data)
+        path = self._path_for(result.job_name)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(asdict(entry)) + "\n")
+        return entry
 
-    def get(self, job_name: str) -> List[HistoryEntry]:
-        """Return history entries for a specific job, oldest first."""
-        data = self._load_raw()
-        return [
-            HistoryEntry(**e) for e in data.get(job_name, [])
-        ]
+    def entries_for(self, job_name: str) -> List[HistoryEntry]:
+        return [HistoryEntry(**row) for row in self._load_raw(job_name)]
 
-    def last_failure(self, job_name: str) -> Optional[HistoryEntry]:
-        """Return the most recent failed entry for a job, or None."""
-        for entry in reversed(self.get(job_name)):
-            if not entry.succeeded:
-                return entry
-        return None
+    def replace_entries(self, job_name: str, entries: List[HistoryEntry]) -> None:
+        """Overwrite stored entries for *job_name* with *entries*."""
+        path = self._path_for(job_name)
+        with path.open("w", encoding="utf-8") as fh:
+            for entry in entries:
+                fh.write(json.dumps(asdict(entry)) + "\n")
+
+    def all_entries(self) -> List[HistoryEntry]:
+        entries: List[HistoryEntry] = []
+        for path in sorted(self._dir.glob("*.jsonl")):
+            with path.open(encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if line:
+                        entries.append(HistoryEntry(**json.loads(line)))
+        return entries
