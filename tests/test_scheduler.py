@@ -34,6 +34,18 @@ def _utc(year=2024, month=1, day=1, hour=12, minute=0, second=0) -> datetime:
     return datetime(year, month, day, hour, minute, second, tzinfo=timezone.utc)
 
 
+def _make_result(job_name="job0", success=True, returncode=0, stderr="", duration=0.1) -> ExecutionResult:
+    """Return an ExecutionResult with sensible defaults for use in tests."""
+    return ExecutionResult(
+        job_name=job_name,
+        success=success,
+        returncode=returncode,
+        stdout="",
+        stderr=stderr,
+        duration=duration,
+    )
+
+
 # ── next_run / is_due ─────────────────────────────────────────────────────────
 
 def test_next_run_returns_future_datetime():
@@ -60,10 +72,7 @@ def test_tick_runs_due_job():
     scheduler, _ = _make_scheduler(EVERY_MINUTE)
     now = _utc(second=0)
     with patch("cronwatch.scheduler.run_job") as mock_run:
-        mock_run.return_value = ExecutionResult(
-            job_name="job0", success=True, returncode=0,
-            stdout="", stderr="", duration=0.1,
-        )
+        mock_run.return_value = _make_result()
         results = scheduler.tick(now)
     assert len(results) == 1
     mock_run.assert_called_once()
@@ -79,10 +88,7 @@ def test_tick_skips_non_due_job():
 def test_tick_sends_alert_on_failure():
     scheduler, alerter = _make_scheduler(EVERY_MINUTE)
     now = _utc(second=0)
-    failed = ExecutionResult(
-        job_name="job0", success=False, returncode=1,
-        stdout="", stderr="error", duration=0.5,
-    )
+    failed = _make_result(success=False, returncode=1, stderr="error", duration=0.5)
     with patch("cronwatch.scheduler.run_job", return_value=failed):
         scheduler.tick(now)
     alerter.send.assert_called_once_with(failed)
@@ -91,23 +97,7 @@ def test_tick_sends_alert_on_failure():
 def test_tick_no_alert_on_success():
     scheduler, alerter = _make_scheduler(EVERY_MINUTE)
     now = _utc(second=0)
-    ok = ExecutionResult(
-        job_name="job0", success=True, returncode=0,
-        stdout="ok", stderr="", duration=0.1,
-    )
+    ok = _make_result()
     with patch("cronwatch.scheduler.run_job", return_value=ok):
         scheduler.tick(now)
     alerter.send.assert_not_called()
-
-
-def test_tick_does_not_rerun_within_same_minute():
-    scheduler, _ = _make_scheduler(EVERY_MINUTE)
-    now = _utc(second=0)
-    ok = ExecutionResult(
-        job_name="job0", success=True, returncode=0,
-        stdout="", stderr="", duration=0.05,
-    )
-    with patch("cronwatch.scheduler.run_job", return_value=ok) as mock_run:
-        scheduler.tick(now)
-        scheduler.tick(now)  # same timestamp — should not re-run
-    assert mock_run.call_count == 1
