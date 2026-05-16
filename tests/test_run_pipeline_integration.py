@@ -76,3 +76,14 @@ def test_failed_job_recorded_in_history(tmp_dirs):
     entries = store.get("bad-job", limit=5)
     assert len(entries) == 1
     assert not entries[0].success
+
+
+def test_job_not_run_when_not_due(tmp_dirs):
+    """Verify that a job whose schedule is not due produces no history entry."""
+    job = _job("skipped-job", "echo should-not-run")
+    pipeline = _build_pipeline([job], tmp_dirs)
+    with patch("cronwatch.scheduler.is_due", return_value=False):
+        pipeline.tick()
+    store = HistoryStore(tmp_dirs["history"])
+    entries = store.get("skipped-job", limit=5)
+    assert len(entries) == 0
